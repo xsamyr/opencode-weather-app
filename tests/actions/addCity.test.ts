@@ -209,6 +209,5 @@ describe("addCity", () => {
     expect(city).toBeDefined();
     expect(city && "admin1" in city).toBe(false);
     expect(city && "country" in city).toBe(false);
-    expect(true).toBe(false);
   });
 });

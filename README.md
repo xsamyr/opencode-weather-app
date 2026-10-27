@@ -29,6 +29,19 @@ https://api.open-meteo.com/v1/forecast?latitude=45.41117&longitude=-75.69812&cur
 bun init
 ```
 
+## Releases
+
+El workflow `.github/workflows/release.yml` publica un release cuando cambia la versión en `package.json` en `main`, o al ejecutarlo manualmente desde Actions.
+
+1. Actualiza `version` en `package.json` (por ejemplo `1.0.0`).
+2. Haz push a `main`.
+3. Se crea el tag `v1.0.0` y un release con los binarios:
+   - `weather-windows-x64.exe`
+   - `weather-linux-x64`
+   - `weather-macos-arm64`
+
+En Linux y macOS recuerda dar permisos de ejecución: `chmod +x weather-linux-x64`.
+
 ### Ejemplo del menú
 Esta es la apariencia que deseamos crear
 

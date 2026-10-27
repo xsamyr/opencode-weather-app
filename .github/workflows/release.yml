@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      should_release: ${{ steps.meta.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: meta
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "El tag $TAG ya existe; no se publicara de nuevo."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Se publicara $TAG."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: version
+    if: needs.version.outputs.should_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            built: weather.exe
+            asset: weather-windows-x64.exe
+          - os: ubuntu-latest
+            built: weather
+            asset: weather-linux-x64
+          - os: macos-latest
+            built: weather
+            asset: weather-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Instalar dependencias
+        run: bun install --frozen-lockfile
+      - name: Compilar (typecheck + tests + binario)
+        run: bun run build
+      - name: Preparar asset
+        shell: bash
+        run: mv "${{ matrix.built }}" "${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    if: needs.version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Permisos de ejecucion
+        run: chmod +x dist/weather-* || true
+      - name: Crear tag y release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: ${{ needs.version.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            Binarios disponibles:
+            - `weather-windows-x64.exe` (Windows x64)
+            - `weather-linux-x64` (Linux x64, requiere `chmod +x`)
+            - `weather-macos-arm64` (macOS ARM64, requiere `chmod +x`)
+          files: dist/*
